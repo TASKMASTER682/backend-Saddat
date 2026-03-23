@@ -28,9 +28,31 @@ const limiter = rateLimit({
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || origin.startsWith('http://localhost:30') || origin.startsWith('http://127.0.0.1:30')) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    const localhostOrigins = [
+      'http://localhost:30',
+      'http://127.0.0.1:30',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3001',
+    ];
+    
+    const productionOrigins = [
+      'https://fro-sadaat.vercel.app',
+    ];
+    
+    if (process.env.ALLOWED_ORIGINS) {
+      process.env.ALLOWED_ORIGINS.split(',').forEach(o => productionOrigins.push(o.trim()));
+    }
+    
+    const allowedOrigins = isProduction ? productionOrigins : localhostOrigins;
+    
+    if (!origin || allowedOrigins.some(o => origin?.includes(o))) {
       callback(null, true);
     } else {
+      console.log('CORS blocked:', { origin, isProduction, allowedOrigins });
       callback(new Error('Not allowed by CORS'));
     }
   },
