@@ -28,36 +28,33 @@ const limiter = rateLimit({
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    const localhostOrigins = [
+    const allowedOrigins = [
       'http://localhost:30',
       'http://127.0.0.1:30',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3001',
-    ];
-    
-    const productionOrigins = [
       'https://fro-sadaat.vercel.app',
+      'https://fro-sadaat*.vercel.app',
+      'http://localhost:5000',
+      'http://127.0.0.1:5000',
     ];
     
     if (process.env.ALLOWED_ORIGINS) {
-      process.env.ALLOWED_ORIGINS.split(',').forEach(o => productionOrigins.push(o.trim()));
+      process.env.ALLOWED_ORIGINS.split(',').forEach(o => allowedOrigins.push(o.trim()));
     }
     
-    const allowedOrigins = isProduction ? productionOrigins : localhostOrigins;
-    
-    if (!origin || allowedOrigins.some(o => origin?.includes(o))) {
+    if (!origin || allowedOrigins.some(o => origin?.includes(o.replace('*', '')))) {
       callback(null, true);
     } else {
-      console.log('CORS blocked:', { origin, isProduction, allowedOrigins });
+      console.log('CORS blocked:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 app.use('/api/', limiter);
