@@ -12,6 +12,9 @@ const transactionRoutes = require('./routes/transactions');
 const proposalRoutes = require('./routes/proposals');
 const auditRoutes = require('./routes/audit');
 const announcementRoutes = require('./routes/announcements');
+const blogRoutes = require('./routes/blogs');
+const contactRoutes = require('./routes/contacts');
+const cronRoutes = require('./routes/cron');
 
 const app = express();
 
@@ -45,6 +48,9 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/blogs', blogRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/cron', cronRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

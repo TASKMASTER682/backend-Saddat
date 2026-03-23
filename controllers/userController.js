@@ -45,11 +45,15 @@ exports.getUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const allowed = ['name', 'phone', 'bio', 'avatar', 'status'];
-    const adminAllowed = ['role', 'fatherId', 'isAlive', 'pendingApproval'];
+    const adminAllowed = ['role', 'fatherId', 'pendingApproval'];
+    const leaderScholarAllowed = ['isAlive'];
 
     const fields = { ...req.body };
-    if (req.user.role !== 'admin' && req.user.role !== 'leader') {
+    if (!['admin', 'leader'].includes(req.user.role)) {
       adminAllowed.forEach((f) => delete fields[f]);
+    }
+    if (!['leader', 'scholar'].includes(req.user.role)) {
+      leaderScholarAllowed.forEach((f) => delete fields[f]);
     }
     // Remove sensitive fields
     delete fields.password;
@@ -75,23 +79,33 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// DELETE /api/users/:id - Admin only
+// DELETE /api/users/:id - Admin, Leader, or Scholar
 exports.deleteUser = async (req, res) => {
   try {
+    const allowedRoles = ['admin', 'leader', 'scholar'];
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Only leaders and scholars can remove members.' });
+    }
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
     if (user.isStatic) return res.status(403).json({ success: false, message: 'Cannot delete static ancestor.' });
+    
+    // Cannot delete yourself
+    if (user._id.toString() === req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Cannot delete yourself.' });
+    }
 
     await User.findByIdAndDelete(req.params.id);
     await createAuditLog({
       action: 'USER_DELETED',
       performedBy: req.user._id,
       targetUser: user._id,
-      details: { name: user.name },
+      details: { name: user.name, deletedBy: req.user.name },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, message: 'User deleted.' });
+    res.json({ success: true, message: 'Member removed from clan.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -100,7 +114,7 @@ exports.deleteUser = async (req, res) => {
 // POST /api/users/:id/attach - Attach user to a father
 exports.attachToFather = async (req, res) => {
   try {
-    const { fatherId } = req.body;
+    const { fatherId, isAlive = true } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
@@ -115,13 +129,14 @@ exports.attachToFather = async (req, res) => {
     user.fatherId = fatherId;
     user.pendingApproval = false;
     user.status = 'active';
+    user.isAlive = isAlive;
     await user.save();
 
     await createAuditLog({
       action: 'LINEAGE_UPDATED',
       performedBy: req.user._id,
       targetUser: user._id,
-      details: { fatherId, fatherName: father.name },
+      details: { fatherId, fatherName: father.name, isAlive },
       ipAddress: req.ip,
     });
 

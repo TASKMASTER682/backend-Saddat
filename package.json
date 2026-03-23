@@ -1,7 +1,7 @@
 {
   "name": "ahal-sadat-gil-backend",
   "version": "1.0.0",
-  "description": "أهل السادات گيل - Backend API",
+  "description": "کُنْجِ سادات - Backend API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
