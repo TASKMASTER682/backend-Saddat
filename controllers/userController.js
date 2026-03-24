@@ -159,17 +159,17 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// DELETE /api/users/:id - Admin, Leader, or Scholar
+// DELETE /api/users/:id - Only Leader can delete members
 exports.deleteUser = async (req, res) => {
   try {
-    const allowedRoles = ['admin', 'leader', 'scholar'];
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Only leaders and scholars can remove members.' });
+    if (req.user.role !== 'leader') {
+      return res.status(403).json({ success: false, message: 'Only the leader can remove members.' });
     }
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
     if (user.isStatic) return res.status(403).json({ success: false, message: 'Cannot delete static ancestor.' });
+    if (user.role === 'leader') return res.status(403).json({ success: false, message: 'Cannot delete the leader.' });
     
     // Cannot delete yourself
     if (user._id.toString() === req.user._id.toString()) {

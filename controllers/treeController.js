@@ -25,7 +25,8 @@ exports.getFemaleTree = async (req, res) => {
     // Get all father IDs to fetch father names
     const fatherIds = females
       .filter(f => f.fatherId)
-      .map(f => f.fatherId);
+      .map(f => f.fatherId ? f.fatherId.toString() : null)
+      .filter(Boolean);
 
     const fathers = await User.find({ _id: { $in: fatherIds } }).select('_id name').lean();
     const fatherMap = {};
@@ -42,10 +43,11 @@ exports.getFemaleTree = async (req, res) => {
         displayStatus = 'deceased';
       }
 
+      const fatherIdStr = f.fatherId ? f.fatherId.toString() : null;
       return {
         _id: f._id.toString(),
         name: f.name,
-        fatherName: f.fatherId ? (fatherMap[f.fatherId.toString()] || 'Unknown') : null,
+        fatherName: fatherIdStr ? (fatherMap[fatherIdStr] || 'Unknown') : null,
         husbandName: f.husbandName || null,
         status: displayStatus,
         isAlive: f.isAlive,
