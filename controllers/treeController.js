@@ -1,15 +1,66 @@
 const User = require('../models/User');
 const { buildTree, getLineagePath } = require('../utils/treeBuilder');
 
-// GET /api/tree - Get full tree
+// GET /api/tree - Get full tree (males only for main Shajra)
 exports.getTree = async (req, res) => {
   try {
-    const users = await User.find({}).select(
-      '_id name role contributions fatherId isStatic isAlive status pendingApproval joinedAt email'
+    const users = await User.find({ gender: { $ne: 'female' } }).select(
+      '_id name role contributions fatherId isStatic isAlive status pendingApproval joinedAt email gender'
     ).lean();
 
     const tree = buildTree(users);
     res.json({ success: true, data: tree, totalNodes: users.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/tree/females - Get female members list (flat, not tree)
+exports.getFemaleTree = async (req, res) => {
+  try {
+    const females = await User.find({ gender: 'female' }).select(
+      '_id name role fatherId husbandName isStatic isAlive status pendingApproval joinedAt email gender bio description'
+    ).lean();
+
+    // Get all father IDs to fetch father names
+    const fatherIds = females
+      .filter(f => f.fatherId)
+      .map(f => f.fatherId);
+
+    const fathers = await User.find({ _id: { $in: fatherIds } }).select('_id name').lean();
+    const fatherMap = {};
+    fathers.forEach(f => {
+      fatherMap[f._id.toString()] = f.name;
+    });
+
+    // Build flat list with father and husband names
+    const ladies = females.map(f => {
+      let displayStatus = 'active';
+      if (f.isStatic) {
+        displayStatus = 'ancestor';
+      } else if (!f.isAlive) {
+        displayStatus = 'deceased';
+      }
+
+      return {
+        _id: f._id.toString(),
+        name: f.name,
+        fatherName: f.fatherId ? (fatherMap[f.fatherId.toString()] || 'Unknown') : null,
+        husbandName: f.husbandName || null,
+        status: displayStatus,
+        isAlive: f.isAlive,
+        isStatic: f.isStatic,
+        role: f.role,
+        joinedAt: f.joinedAt,
+        bio: f.bio || '',
+        description: f.description || '',
+      };
+    });
+
+    // Sort by name
+    ladies.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ success: true, data: ladies, totalNodes: ladies.length });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

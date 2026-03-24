@@ -2,9 +2,14 @@ const mongoose = require('mongoose');
 
 const voteSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  vote: { type: String, enum: ['approve', 'reject'], required: true },
+  vote: { type: String, required: true },
   comment: { type: String, maxlength: 300 },
   votedAt: { type: Date, default: Date.now },
+});
+
+const optionSchema = new mongoose.Schema({
+  text: { type: String, required: true, maxlength: 200 },
+  description: { type: String, maxlength: 500 },
 });
 
 const proposalSchema = new mongoose.Schema(
@@ -16,6 +21,12 @@ const proposalSchema = new mongoose.Schema(
       enum: ['withdrawal', 'role_change', 'member_approval', 'general', 'policy'],
       required: true,
     },
+    votingType: {
+      type: String,
+      enum: ['approve_reject', 'multiple_choice'],
+      default: 'approve_reject',
+    },
+    options: [optionSchema],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: {
       type: String,
@@ -25,9 +36,7 @@ const proposalSchema = new mongoose.Schema(
     votes: [voteSchema],
     requiredApprovals: { type: Number, default: 3 },
     deadline: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
-    // For withdrawal proposals
     relatedTransaction: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
-    // For role change proposals
     targetUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     newRole: { type: String, enum: ['leader', 'admin', 'member', null], default: null },
     executedAt: { type: Date },
@@ -36,12 +45,10 @@ const proposalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Virtual: approval count
 proposalSchema.virtual('approvalCount').get(function () {
   return this.votes.filter((v) => v.vote === 'approve').length;
 });
 
-// Virtual: rejection count
 proposalSchema.virtual('rejectionCount').get(function () {
   return this.votes.filter((v) => v.vote === 'reject').length;
 });

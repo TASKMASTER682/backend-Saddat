@@ -15,8 +15,76 @@ const announcementRoutes = require('./routes/announcements');
 const blogRoutes = require('./routes/blogs');
 const contactRoutes = require('./routes/contacts');
 const cronRoutes = require('./routes/cron');
+const galleryRoutes = require('./routes/gallery');
+const interestRoutes = require('./routes/interest');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
+
+// Migration: Update existing users without gender to 'male' and ensure isOpenForSpouse exists
+const migrateUsers = async () => {
+  console.log('🔄 Running migrations...');
+  try {
+    const User = require('./models/User');
+    const [result1, result2, result3, result4, result5, result6, result7] = await Promise.all([
+      User.updateMany(
+        { gender: { $exists: false } },
+        { $set: { gender: 'male' } }
+      ),
+      User.updateMany(
+        { isOpenForSpouse: { $exists: false } },
+        { $set: { isOpenForSpouse: false } }
+      ),
+      User.updateMany(
+        { bio: { $exists: false } },
+        { $set: { bio: '' } }
+      ),
+      User.updateMany(
+        { description: { $exists: false } },
+        { $set: { description: '' } }
+      ),
+      User.updateMany(
+        { $or: [
+          { role: 'ancestor' },
+          { status: 'ancestor' }
+        ]},
+        { $set: { isStatic: true } }
+      ),
+      User.updateMany(
+        { status: 'deceased' },
+        { $set: { isStatic: true, isAlive: false } }
+      ),
+      User.updateMany(
+        { isAlive: { $exists: false } },
+        { $set: { isAlive: true } }
+      ),
+    ]);
+    if (result1.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result1.modifiedCount} users to have gender: 'male'`);
+    }
+    if (result2.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result2.modifiedCount} users to have isOpenForSpouse: false`);
+    }
+    if (result3.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result3.modifiedCount} users to have bio field`);
+    }
+    if (result4.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result4.modifiedCount} users to have description field`);
+    }
+    if (result5.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result5.modifiedCount} ancestors to have isStatic: true`);
+    }
+    if (result6.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result6.modifiedCount} deceased to have isStatic: true and isAlive: false`);
+    }
+    if (result7.modifiedCount > 0) {
+      console.log(`✅ Migrated ${result7.modifiedCount} users to have isAlive: true`);
+    }
+    console.log('✅ Migrations complete');
+  } catch (err) {
+    console.error('❌ Migration error:', err.message);
+  }
+};
 
 // Rate limiting
 const limiter = rateLimit({
@@ -30,6 +98,8 @@ const allowedOrigins = [
   'https://fro-sadaat-gzdy.vercel.app', // Aapka live website URL
   'http://localhost:3000'             // Local testing ke liye
 ];
+
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -61,6 +131,9 @@ app.use('/api/announcements', announcementRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/gallery', galleryRoutes);
+app.use('/api/interests', interestRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -81,8 +154,9 @@ const PORT = process.env.PORT || 5000;
 
 mongoose
   .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/digital-clan')
-  .then(() => {
+  .then(async () => {
     console.log('✅ MongoDB connected');
+    await migrateUsers(); // Run migrations
     app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {

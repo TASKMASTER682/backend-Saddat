@@ -25,7 +25,7 @@ exports.getProposals = async (req, res) => {
 // POST /api/proposals
 exports.createProposal = async (req, res) => {
   try {
-    const { title, description, type, relatedTransaction, targetUser, newRole, deadline } = req.body;
+    const { title, description, type, relatedTransaction, targetUser, newRole, deadline, votingType, options } = req.body;
 
     if (!title || !description || !type) {
       return res.status(400).json({ success: false, message: 'Title, description and type are required.' });
@@ -40,14 +40,31 @@ exports.createProposal = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Only admins and leaders can create proposals.' });
     }
 
+    // Validate multiple choice proposals have at least 2 options
+    if (votingType === 'multiple_choice') {
+      if (!options || options.length < 2) {
+        return res.status(400).json({ success: false, message: 'Multiple choice proposals need at least 2 options.' });
+      }
+      if (options.length > 6) {
+        return res.status(400).json({ success: false, message: 'Maximum 6 options allowed.' });
+      }
+    }
+
     const proposalData = {
       title,
       description,
       type,
       createdBy: req.user._id,
-      // Admin creates → draft, Leader creates → open directly
       status: req.user.role === 'leader' ? 'open' : 'draft',
+      votingType: votingType || 'approve_reject',
     };
+
+    if (votingType === 'multiple_choice' && options) {
+      proposalData.options = options.map((opt) => ({
+        text: opt.text,
+        description: opt.description || ''
+      }));
+    }
 
     if (relatedTransaction) proposalData.relatedTransaction = relatedTransaction;
     if (targetUser) proposalData.targetUser = targetUser;
@@ -59,7 +76,7 @@ exports.createProposal = async (req, res) => {
     await createAuditLog({
       action: 'PROPOSAL_CREATED',
       performedBy: req.user._id,
-      details: { title, type, proposalId: proposal._id, status: proposal.status },
+      details: { title, type, proposalId: proposal._id, status: proposal.status, votingType },
       ipAddress: req.ip,
     });
 
@@ -110,21 +127,20 @@ exports.vote = async (req, res) => {
     const existing = proposal.votes.find((v) => v.userId.toString() === req.user._id.toString());
     if (existing) return res.status(400).json({ success: false, message: 'Already voted on this proposal.' });
 
-    // All members can vote
+    // Validate vote for multiple choice
+    if (proposal.votingType === 'multiple_choice') {
+      const validOptions = proposal.options.map((o) => o.text);
+      const approvals = proposal.votes.filter((v) => v.vote === 'approve').length;
+      const rejections = proposal.votes.filter((v) => v.vote === 'reject').length;
+      const totalActiveMembers = await User.countDocuments({ status: 'active' });
+      const approvalThreshold = Math.ceil(totalActiveMembers * 0.5);
 
-    proposal.votes.push({ userId: req.user._id, vote, comment });
-
-    // Check if auto-approve/reject threshold reached (based on total active members)
-    const approvals = proposal.votes.filter((v) => v.vote === 'approve').length;
-    const rejections = proposal.votes.filter((v) => v.vote === 'reject').length;
-    const totalActiveMembers = await User.countDocuments({ status: 'active' });
-    const approvalThreshold = Math.ceil(totalActiveMembers * 0.5); // 50% majority needed
-
-    if (approvals >= approvalThreshold) {
-      proposal.status = 'approved';
-      await executeProposal(proposal);
-    } else if (rejections > totalActiveMembers - approvalThreshold) {
-      proposal.status = 'rejected';
+      if (approvals >= approvalThreshold) {
+        proposal.status = 'approved';
+        await executeProposal(proposal);
+      } else if (rejections > totalActiveMembers - approvalThreshold) {
+        proposal.status = 'rejected';
+      }
     }
 
     await proposal.save();
@@ -182,16 +198,16 @@ exports.getProposal = async (req, res) => {
   }
 };
 
-// DELETE /api/proposals/:id - Leader/Admin can delete draft proposals
+// DELETE /api/proposals/:id - Only leader can delete proposals
 exports.deleteProposal = async (req, res) => {
   try {
     const proposal = await Proposal.findById(req.params.id);
 
     if (!proposal) return res.status(404).json({ success: false, message: 'Proposal not found.' });
     
-    // Only leader or admin can delete proposals
-    if (!['leader', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Only leaders and admins can delete proposals.' });
+    // Only leader can delete proposals
+    if (req.user.role !== 'leader') {
+      return res.status(403).json({ success: false, message: 'Only leaders can delete proposals.' });
     }
 
     await Proposal.findByIdAndDelete(req.params.id);

@@ -16,6 +16,7 @@ function buildTree(users) {
         contributions: user.contributions,
         isStatic: user.isStatic,
         isAlive: user.isAlive,
+        gender: user.gender || 'male',
         email: user.email,
         joinedAt: user.joinedAt,
         pendingApproval: user.pendingApproval,

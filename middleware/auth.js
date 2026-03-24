@@ -15,7 +15,7 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-password');
+    req.user = await User.findById(decoded.id).select('-password').populate('fatherId', 'name role');
 
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'User no longer exists.' });
@@ -42,7 +42,7 @@ const authorize = (...roles) => {
 
 // Admin or self check
 const adminOrSelf = (req, res, next) => {
-  if (req.user.role === 'admin' || req.user.role === 'leader' || req.user._id.toString() === req.params.id) {
+  if (['admin', 'leader', 'scholar'].includes(req.user.role) || req.user._id.toString() === req.params.id) {
     return next();
   }
   return res.status(403).json({ success: false, message: 'Access denied.' });

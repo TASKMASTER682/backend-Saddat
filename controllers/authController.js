@@ -8,10 +8,14 @@ const signToken = (id) =>
 // POST /api/auth/register
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, fatherName, fatherId, phone, isAlive = true } = req.body;
+    const { name, email, password, fatherId, phone, isAlive = true, gender = 'male' } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Name, email and password are required.' });
+    }
+
+    if (!fatherId) {
+      return res.status(400).json({ success: false, message: 'Father selection is required. Please select your father from the clan tree.' });
     }
 
     const existing = await User.findOne({ email });
@@ -19,20 +23,9 @@ exports.register = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Email already registered.' });
     }
 
-    // Resolve fatherId
-    let resolvedFatherId = null;
-    let pendingApproval = false;
-
-    if (fatherId) {
-      const father = await User.findById(fatherId);
-      if (father) resolvedFatherId = father._id;
-    } else if (fatherName) {
-      const father = await User.findOne({ name: new RegExp(`^${fatherName}$`, 'i') });
-      if (father) {
-        resolvedFatherId = father._id;
-      } else {
-        pendingApproval = true; // Father not found, needs admin approval
-      }
+    const father = await User.findById(fatherId);
+    if (!father) {
+      return res.status(400).json({ success: false, message: 'Selected father not found. Please search and select again.' });
     }
 
     const user = await User.create({
@@ -40,21 +33,22 @@ exports.register = async (req, res) => {
       email,
       password,
       phone,
-      fatherId: resolvedFatherId,
-      pendingApproval,
-      status: pendingApproval ? 'pending' : 'active',
+      fatherId: father._id,
+      pendingApproval: false,
+      status: 'active',
       isAlive,
+      gender,
     });
 
     await createAuditLog({
       action: 'USER_REGISTERED',
       performedBy: user._id,
-      details: { email, fatherId: resolvedFatherId, pendingApproval },
+      details: { email, fatherId: father._id, fatherName: father.name },
       ipAddress: req.ip,
     });
 
     const token = signToken(user._id);
-    res.status(201).json({ success: true, token, data: user, pendingApproval });
+    res.status(201).json({ success: true, token, data: user, pendingApproval: false });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -69,8 +63,18 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password required.' });
     }
 
-    const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
+    console.log('Login attempt for:', email);
+    const user = await User.findOne({ email }).select('+password').populate('fatherId', 'name role');
+    console.log('User found:', !!user);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    }
+    
+    const passwordMatch = await user.comparePassword(password);
+    console.log('Password match:', passwordMatch);
+    
+    if (!passwordMatch) {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 

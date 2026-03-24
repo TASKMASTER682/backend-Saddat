@@ -45,12 +45,27 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'pending'],
+      enum: ['active', 'inactive', 'pending', 'ancestor', 'deceased'],
       default: 'active',
     },
     phone: { type: String, trim: true },
     bio: { type: String, maxlength: 500 },
+    description: { type: String, maxlength: 1000 },
     avatar: { type: String },
+    gender: {
+      type: String,
+      enum: ['male', 'female'],
+      default: 'male',
+    },
+    husbandName: { type: String },
+    isOpenForSpouse: {
+      type: Boolean,
+      default: false,
+    },
+    spouseSearchBio: {
+      type: String,
+      maxlength: 500,
+    },
     invitedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
