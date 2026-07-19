@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
@@ -86,27 +87,36 @@ const migrateUsers = async () => {
   }
 };
 
-// Rate limiting
+// Rate limiting - global
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   message: 'Too many requests from this IP',
 });
 
+// Strict rate limiter for auth routes (login/register)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many auth attempts from this IP, please try again later.',
+});
+
 // Middleware
 const allowedOrigins = [
-  'https://fro-sadaat-gzdy.vercel.app', // Aapka live website URL
-  'http://localhost:3000'             // Local testing ke liye
+  'https://fro-sadaat-gzdy.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
 ];
 
 app.set('trust proxy', 1);
 
+app.use(helmet());
+
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
-      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }
     return callback(null, true);
@@ -120,8 +130,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 app.use('/api/', limiter);
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Auth routes get stricter rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tree', treeRoutes);
 app.use('/api/transactions', transactionRoutes);

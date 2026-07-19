@@ -14,6 +14,12 @@ const gallerySchema = new mongoose.Schema({
   imageData: {
     type: String,
     required: [true, 'Image is required'],
+    validate: {
+      validator: function(v) {
+        return v.length <= 7 * 1024 * 1024;
+      },
+      message: 'Image data exceeds maximum size.',
+    },
   },
   imageType: {
     type: String,

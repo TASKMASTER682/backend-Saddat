@@ -16,10 +16,11 @@ exports.getBlogs = async (req, res) => {
     if (category) filter.category = category;
     if (language) filter.language = language;
     if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { titleUrdu: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } },
+        { title: { $regex: escaped, $options: 'i' } },
+        { titleUrdu: { $regex: escaped, $options: 'i' } },
+        { content: { $regex: escaped, $options: 'i' } },
       ];
     }
 

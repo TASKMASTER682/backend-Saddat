@@ -14,6 +14,10 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, email and password are required.' });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
     if (!fatherId) {
       return res.status(400).json({ success: false, message: 'Father selection is required. Please select your father from the clan tree.' });
     }
@@ -63,16 +67,13 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password required.' });
     }
 
-    console.log('Login attempt for:', email);
     const user = await User.findOne({ email }).select('+password').populate('fatherId', 'name role');
-    console.log('User found:', !!user);
     
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
     
     const passwordMatch = await user.comparePassword(password);
-    console.log('Password match:', passwordMatch);
     
     if (!passwordMatch) {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });

@@ -83,7 +83,6 @@ exports.createProposal = async (req, res) => {
     const populated = await Proposal.findById(proposal._id).populate('createdBy', 'name role');
     res.status(201).json({ success: true, data: populated });
   } catch (err) {
-    console.error('Create proposal error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -179,7 +178,8 @@ async function executeProposal(proposal) {
     proposal.status = 'executed';
     proposal.executedAt = new Date();
   } catch (err) {
-    console.error('Proposal execution error:', err);
+    proposal.status = 'error';
+    await proposal.save();
   }
 }
 

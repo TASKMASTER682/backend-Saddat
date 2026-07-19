@@ -41,12 +41,15 @@ exports.createGalleryItem = async (req, res) => {
     }
 
     // Validate base64 image data
-    if (!imageData.startsWith('data:image/')) {
-      return res.status(400).json({ success: false, message: 'Invalid image format.' });
+    const validTypes = ['data:image/jpeg', 'data:image/png', 'data:image/webp', 'data:image/gif'];
+    if (!validTypes.some(t => imageData.startsWith(t))) {
+      return res.status(400).json({ success: false, message: 'Invalid image format. Allowed: JPEG, PNG, WebP, GIF.' });
     }
 
-    // Max 5MB
-    if (imageData.length > 7 * 1024 * 1024) {
+    // Max 5MB (base64 is ~37% larger than binary, so 5MB binary ≈ 7MB base64)
+    const base64Data = imageData.split(',')[1] || '';
+    const sizeInBytes = Math.round((base64Data.length * 3) / 4);
+    if (sizeInBytes > 5 * 1024 * 1024) {
       return res.status(400).json({ success: false, message: 'Image size must be less than 5MB.' });
     }
 
